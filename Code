@@ -1,0 +1,70 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+from sklearn.preprocessing import MinMaxScaler
+
+# Simulate second-order system
+def simulate_second_order_system(u, zeta=0.5, wn=2.0, dt=0.01):
+    y = [0, 0]
+    y_dot = [0]
+    for i in range(1, len(u)):
+        # Euler method for numerical integration
+        acc = wn**2 * (u[i] - y[-1]) - 2 * zeta * wn * y_dot[-1]
+        y_new = y[-1] + dt * y_dot[-1]
+        y_dot_new = y_dot[-1] + dt * acc
+        y.append(y_new)
+        y_dot.append(y_dot_new)
+    return np.array(y)
+
+# Generate input signal
+np.random.seed(0)
+samples = 5000
+u = np.random.uniform(-1, 1, size=samples)
+y = simulate_second_order_system(u)
+
+# Prepare dataset for supervised learning
+X, Y = [], []
+for i in range(2, len(y)):
+    X.append([y[i-1], y[i-2], u[i-1], u[i-2]])
+    Y.append(y[i])
+X, Y = np.array(X), np.array(Y)
+
+# Normalize
+scaler_X = MinMaxScaler()
+scaler_Y = MinMaxScaler()
+X = scaler_X.fit_transform(X)
+Y = scaler_Y.fit_transform(Y.reshape(-1, 1))
+
+# Split into training and test sets
+split = int(0.8 * len(X))
+X_train, X_test = X[:split], X[split:]
+Y_train, Y_test = Y[:split], Y[split:]
+
+# Build ANN model
+model = Sequential([
+    Dense(20, activation='tanh', input_shape=(4,)),
+    Dense(20, activation='tanh'),
+    Dense(1, activation='linear')
+])
+model.compile(optimizer=Adam(0.001), loss='mse')
+
+# Train the model
+history = model.fit(X_train, Y_train, epochs=100, batch_size=32, validation_data=(X_test, Y_test), verbose=0)
+
+# Predict and plot
+y_pred = model.predict(X_test)
+y_pred_inv = scaler_Y.inverse_transform(y_pred)
+Y_test_inv = scaler_Y.inverse_transform(Y_test)
+
+plt.figure(figsize=(10, 5))
+plt.plot(Y_test_inv, label='True Output')
+plt.plot(y_pred_inv, label='ANN Predicted Output', linestyle='--')
+plt.legend()
+plt.title("ANN Modeling of Second-Order System")
+plt.xlabel("Time Steps")
+plt.ylabel("Output")
+plt.grid(True)
+plt.show()
+
